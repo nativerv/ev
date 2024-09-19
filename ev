@@ -15,8 +15,6 @@ usage () {
   echo "  ev listen xkblayout-state lang_change *"
 }
 
-set -e
-
 if [ "${#}" -lt 1 ]; then
   usage
   exit 1
@@ -26,11 +24,9 @@ fi
 EV_IN_FIFO="${EV_RUNTIME_DIR}/in.fifo"
 EV_OUT_SOCK="${EV_RUNTIME_DIR}/out.sock"
 
-die () {
-  printf '%s: error: %s' "${1}" "${2}"
+info () {
+  printf 2>'/dev/null' 'ev: ERROR: %s\n' "${1}"
 }
-
-umask 077
 
 case "${1}" in
   serve)
@@ -38,15 +34,15 @@ case "${1}" in
     [ ! -p "${EV_RUNTIME_DIR}" ] && mkdir -p "${EV_RUNTIME_DIR}" && chmod 700 "${EV_RUNTIME_DIR}"
     [ ! -p "${EV_IN_FIFO}" ] && mkfifo "${EV_IN_FIFO}" && chmod 600 "${EV_IN_FIFO}"
     # If socket exists and responding, exit 
-    set +e
-    ncat -zw1 "${EV_OUT_SOCK}" >/dev/null 2>&1 && die 'already serving (socket is in use and responding)'
-    set -e
+    ncat -zw1 "${EV_OUT_SOCK}" >/dev/null 2>&1 && info 'already serving (socket is in use and responding)' && exit 1
     # Remove old `out` socket
     rm -f "${EV_OUT_SOCK}"
     # Keep the `in` fifo open
     exec 8<>"${EV_IN_FIFO}"
     # Serve messages from it to `out` socket
     ncat --send-only -lkU "${EV_OUT_SOCK}" < "${EV_IN_FIFO}" 
+
+    rm "${EV_OUT_SOCK}" "${EV_IN_FIFO}"
     ;;
   emit) 
     source="${2}"
@@ -55,7 +51,15 @@ case "${1}" in
     printf '%s\t%s\t%s\n' "${source}" "${type}" "${payload}" > "${EV_IN_FIFO}"
     ;;
   listen)
-    ncat -U "${EV_OUT_SOCK}"
+    TIMEOUT=300
+    current=0
+    while true; do
+      # guard for socket not existing
+      socat -u "UNIX-CONNECT:${EV_OUT_SOCK}" '-' 2>'/dev/null'
+      sleep 0.01
+      [ -S "${EV_OUT_SOCK}" ] || current="$((current + 1))"
+      [ "${current}" -eq "${TIMEOUT}" ] && info 'connection timeout' && exit 1
+    done
     ;;
   *)
     usage

@@ -41,6 +41,7 @@
               --suffix PATH : ${lib.makeBinPath [
                 coreutils
                 nmap
+                socat
               ]}
           done
         '';
