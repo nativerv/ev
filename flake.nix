@@ -14,10 +14,10 @@
       "aarch64-darwin"
     ];
   in {
-    # homeManagerModules = {
-    #   default = self.homeManagerModules.ev;
-    #   ev = import ./home-manager/modules/services/ev.nix { inherit self; };
-    # };
+    homeManagerModules = {
+      default = self.homeManagerModules.ev;
+      ev = import ./home-manager/modules/services/ev.nix { inherit self; };
+    };
     packages = forAllSystems (system: let
       pkgs = nixpkgs.legacyPackages.${system};
       inherit (pkgs) lib;
